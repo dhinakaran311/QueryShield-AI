@@ -1,0 +1,19 @@
+# Core
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+psycopg2-binary
+sqlalchemy
+
+# Data
+pandas
+numpy
+
+# LLM (Phase 4)
+openai
+google-generativeai
+
+# Utilities
+python-dotenv
