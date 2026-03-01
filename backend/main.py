@@ -1,7 +1,7 @@
 """
 backend/main.py
 FastAPI application entry point for QueryShield AI.
-Phase 2: CSV Upload endpoint.
+Phase 2: CSV Upload | Phase 3: Schema Detection
 """
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
@@ -10,12 +10,19 @@ from fastapi.responses import JSONResponse
 
 from backend.database import test_connection
 from backend.csv_uploader import upload_csv, get_uploaded_tables
+from backend.schema_detector import (
+    get_all_tables,
+    get_table_columns,
+    get_foreign_keys,
+    get_full_schema,
+    build_schema_prompt,
+)
 
 # ─── App init ─────────────────────────────────────────────────────────────────
 app = FastAPI(
     title       = "QueryShield AI API",
     description = "Secure Conversational Text-to-SQL with Dynamic Data Upload",
-    version     = "0.2.0",
+    version     = "0.3.0",
 )
 
 app.add_middleware(
@@ -107,5 +114,62 @@ def list_uploaded_tables():
     try:
         tables = get_uploaded_tables()
         return {"tables": tables, "count": len(tables)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Phase 3: Schema Detection ────────────────────────────────────────────────
+
+@app.get("/schema", tags=["Schema"])
+def get_schema():
+    """
+    Return full schema: all tables, their columns, and FK relationships.
+    Used by the LLM in Phase 4 to generate accurate SQL.
+    """
+    try:
+        schema = get_full_schema()
+        return {
+            "table_count": len(schema["tables"]),
+            "tables":      {t: cols for t, cols in schema["tables"].items()},
+            "foreign_keys": schema["foreign_keys"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/schema/{table_name}", tags=["Schema"])
+def get_table_schema(table_name: str):
+    """
+    Return column details for a specific table.
+    """
+    try:
+        all_tables = get_all_tables()
+        if table_name not in all_tables:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Table '{table_name}' not found in public schema."
+            )
+        columns = get_table_columns(table_name)
+        return {
+            "table_name": table_name,
+            "columns":    columns,
+            "column_count": len(columns),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/schema-prompt", tags=["Schema"])
+def get_schema_prompt():
+    """
+    Return the schema as a formatted text string ready for LLM injection.
+    (Used internally by Phase 4 SQL generator)
+    """
+    try:
+        schema = get_full_schema()
+        prompt = build_schema_prompt(schema)
+        return {"schema_prompt": prompt}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
