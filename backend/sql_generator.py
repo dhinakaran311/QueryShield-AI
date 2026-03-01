@@ -1,157 +1,160 @@
 """
 backend/sql_generator.py
-Phase 4 — LLM SQL Generation using Google Gemini.
+Phase 4 — LLM SQL Generation.
 
-Responsibilities:
-  - Build a schema-aware system prompt
-  - Send NL query + schema to Gemini
-  - Return clean SELECT-only SQL
-  - Support conversational memory (last SQL for follow-ups)
+Supports two providers (switch via LLM_PROVIDER in .env):
+  - "ollama"  → local Ollama (no API key, no rate limits)
+  - "gemini"  → Google Gemini 2.0 Flash (cloud)
 """
 
 import os
 import re
+import time
+import json
+import urllib.request
+import urllib.error
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
 from backend.schema_detector import get_full_schema, build_schema_prompt
 
 load_dotenv()
 
-# ─── Gemini init ──────────────────────────────────────────────────────────────
-_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL   = "gemini-2.0-flash"
+# ─── Config ───────────────────────────────────────────────────────────────────
+LLM_PROVIDER    = os.getenv("LLM_PROVIDER", "ollama").lower()
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "mistral:latest")
 
 
-# ─── System prompt template ───────────────────────────────────────────────────
-SYSTEM_PROMPT_TEMPLATE = """You are an expert PostgreSQL query generator for the QueryShield AI system.
+# ─── Prompt templates ─────────────────────────────────────────────────────────
+SYSTEM_PROMPT = """You are an expert PostgreSQL query generator.
 
-Your job is to convert a user's natural language question into a precise PostgreSQL SELECT query.
+Convert the user's natural language question into a precise PostgreSQL SELECT query.
 
 DATABASE SCHEMA:
 {schema}
 
-STRICT RULES — you MUST follow all of them:
+STRICT RULES:
 1. Generate ONLY a single SELECT query.
 2. NEVER use: DROP, DELETE, UPDATE, ALTER, INSERT, TRUNCATE, CREATE, EXEC, GRANT, REVOKE.
 3. Return ONLY the raw SQL query — no explanation, no markdown, no code fences.
-4. Use correct table and column names exactly as shown in the schema above.
-5. Use JOINs when the question involves multiple tables.
-6. Use aliases for readability (e.g. c for customers, o for orders).
-7. Add ORDER BY, LIMIT, GROUP BY where appropriate.
-8. If the question is ambiguous, make a sensible best-guess query.
-9. Always end the query with a semicolon.
+4. Use correct table/column names exactly as shown in the schema.
+5. Use JOINs when multiple tables are involved.
+6. Add ORDER BY, LIMIT, GROUP BY where appropriate.
+7. Always end with a semicolon.
 """
 
-FOLLOWUP_PROMPT_TEMPLATE = """You are an expert PostgreSQL query generator for QueryShield AI.
+FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
 
 DATABASE SCHEMA:
 {schema}
 
-The user previously asked:
-"{last_nl}"
+Previous question: "{last_nl}"
+Previous SQL: {last_sql}
 
-Which generated this SQL:
-{last_sql}
-
-Now the user is refining their query:
-"{followup_question}"
+User follow-up: "{followup_question}"
 
 Modify the previous SQL to satisfy the follow-up.
-
-RULES:
-1. Return ONLY the modified SELECT query — no explanation.
-2. Never use destructive keywords (DROP, DELETE, UPDATE, etc.).
-3. End with a semicolon.
+Return ONLY the modified SELECT query ending with a semicolon.
 """
 
 
-# ─── SQL extraction helper ────────────────────────────────────────────────────
-def _extract_sql(raw_text: str) -> str:
-    """
-    Strip markdown fences and extra whitespace from LLM response.
-    Handles ```sql ... ``` and plain text responses.
-    """
-    # Remove markdown code fences
-    text = re.sub(r"```(?:sql)?", "", raw_text, flags=re.IGNORECASE)
+# ─── SQL cleaning ─────────────────────────────────────────────────────────────
+def _clean_sql(raw: str) -> str:
+    """Strip markdown fences, extra whitespace from LLM output."""
+    text = re.sub(r"```(?:sql)?", "", raw, flags=re.IGNORECASE)
     text = text.replace("```", "").strip()
-
-    # Take only the first statement (safety: ignore anything after ;)
-    # Preserve the semicolon at end
     lines = [l for l in text.splitlines() if l.strip()]
     sql = " ".join(lines).strip()
-
-    # Ensure semicolon at end
     if not sql.endswith(";"):
         sql += ";"
-
     return sql
 
 
-# ─── Main generation function ─────────────────────────────────────────────────
+# ─── Ollama call ──────────────────────────────────────────────────────────────
+def _call_ollama(prompt: str) -> str:
+    """
+    Call local Ollama REST API.
+    POST http://localhost:11434/api/generate
+    """
+    payload = json.dumps({
+        "model":  OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{OLLAMA_BASE_URL}/api/generate",
+        data    = payload,
+        headers = {"Content-Type": "application/json"},
+        method  = "POST",
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        body = json.loads(resp.read())
+    return body.get("response", "").strip()
+
+
+# ─── Gemini call ──────────────────────────────────────────────────────────────
+def _call_gemini(prompt: str) -> str:
+    """Call Google Gemini 2.0 Flash with retry/backoff."""
+    from google import genai
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    client  = genai.Client(api_key=api_key)
+    model   = "gemini-2.0-flash"
+
+    last_error = None
+    for attempt in range(3):
+        try:
+            resp = client.models.generate_content(model=model, contents=prompt)
+            return resp.text.strip()
+        except Exception as exc:
+            last_error = exc
+            delay_match = re.search(r"'retryDelay':\s*'(\d+)s'", str(exc))
+            wait = int(delay_match.group(1)) + 2 if delay_match else (2 ** attempt) * 5
+            if attempt < 2:
+                time.sleep(wait)
+            else:
+                raise last_error
+    raise last_error
+
+
+# ─── Main generate function ───────────────────────────────────────────────────
 def generate_sql(
     user_question: str,
-    last_nl: str  = None,
+    last_nl:  str = None,
     last_sql: str = None,
 ) -> dict:
     """
-    Convert a natural language question to a PostgreSQL SELECT query.
+    Convert NL question → PostgreSQL SELECT query.
 
-    Args:
-        user_question: The user's NL question
-        last_nl:       Previous NL question (for follow-ups)
-        last_sql:      Previous SQL (for follow-ups)
-
-    Returns:
-        dict with keys: sql, is_followup, schema_used
+    Picks LLM provider from LLM_PROVIDER env var:
+      "ollama" → local (no rate limits)
+      "gemini" → Gemini 2.0 Flash
     """
-    # Get current schema
-    schema = get_full_schema()
+    schema      = get_full_schema()
     schema_text = build_schema_prompt(schema)
-
-    # Decide: fresh query or follow-up?
     is_followup = bool(last_sql and last_nl)
 
     if is_followup:
-        prompt = FOLLOWUP_PROMPT_TEMPLATE.format(
+        prompt = FOLLOWUP_PROMPT.format(
             schema            = schema_text,
             last_nl           = last_nl,
             last_sql          = last_sql,
             followup_question = user_question,
         )
     else:
-        prompt = SYSTEM_PROMPT_TEMPLATE.format(schema=schema_text)
+        prompt = SYSTEM_PROMPT.format(schema=schema_text)
         prompt += f"\n\nUser question: {user_question}\nSQL:"
 
-    # ── Call Gemini with retry/backoff for free-tier rate limits ──────────────
-    import time
-
-    last_error = None
-    for attempt in range(3):            # max 3 attempts
-        try:
-            response = _client.models.generate_content(
-                model    = MODEL,
-                contents = prompt,
-            )
-            raw_sql = response.text.strip()
-            break                       # success — exit retry loop
-        except Exception as exc:
-            last_error = exc
-            err_str = str(exc)
-            # Parse retryDelay from error message if present
-            delay_match = re.search(r"'retryDelay':\s*'(\d+)s'", err_str)
-            wait_secs   = int(delay_match.group(1)) + 2 if delay_match else (2 ** attempt) * 5
-            if attempt < 2:
-                time.sleep(wait_secs)
-            else:
-                raise last_error        # all retries exhausted
-
-    # Clean the response
-    clean_sql = _extract_sql(raw_sql)
+    # Dispatch to provider
+    if LLM_PROVIDER == "gemini":
+        raw = _call_gemini(prompt)
+    else:  # default: ollama
+        raw = _call_ollama(prompt)
 
     return {
-        "sql":         clean_sql,
+        "sql":         _clean_sql(raw),
         "is_followup": is_followup,
         "schema_used": list(schema["tables"].keys()),
+        "provider":    LLM_PROVIDER,
+        "model":       OLLAMA_MODEL if LLM_PROVIDER == "ollama" else "gemini-2.0-flash",
     }
