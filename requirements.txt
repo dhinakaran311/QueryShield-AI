@@ -13,7 +13,7 @@ numpy
 
 # LLM (Phase 4)
 openai
-google-generativeai
+google-genai
 
 # Utilities
 python-dotenv

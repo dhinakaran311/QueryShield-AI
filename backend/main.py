@@ -173,3 +173,43 @@ def get_schema_prompt():
         return {"schema_prompt": prompt}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Phase 4: LLM SQL Generation ─────────────────────────────────────────────
+from pydantic import BaseModel
+from typing import Optional
+from backend.sql_generator import generate_sql as llm_generate_sql
+
+
+class SQLRequest(BaseModel):
+    question: str
+    last_nl:  Optional[str] = None
+    last_sql: Optional[str] = None
+
+
+@app.post("/generate-sql", tags=["SQL Generation"])
+def generate_sql_endpoint(req: SQLRequest):
+    """
+    Convert a natural language question to a PostgreSQL SELECT query.
+
+    - Uses Gemini 1.5 Flash with full schema context
+    - Supports follow-up queries via last_nl + last_sql
+    - Returns SELECT-only SQL
+    """
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+    try:
+        result = llm_generate_sql(
+            user_question = req.question,
+            last_nl       = req.last_nl,
+            last_sql      = req.last_sql,
+        )
+        return {
+            "success":     True,
+            "question":    req.question,
+            "sql":         result["sql"],
+            "is_followup": result["is_followup"],
+            "schema_used": result["schema_used"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SQL generation failed: {str(e)}")
