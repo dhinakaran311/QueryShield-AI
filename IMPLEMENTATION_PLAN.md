@@ -265,7 +265,7 @@ SQL:
 
 ---
 
-## 🔹 PHASE 5 — Security Layer
+## 🔹 PHASE 5 — Security Layer [COMPLETED]
 
 **Goal:** Block all unsafe and injection queries.
 
