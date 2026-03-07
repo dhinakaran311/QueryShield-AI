@@ -305,7 +305,7 @@ INJECTION_PATTERNS = [
 
 ---
 
-## 🔹 PHASE 6 — Query Execution & Visualization
+## 🔹 PHASE 6 — Query Execution & Visualization [COMPLETED]
 
 **Goal:** Execute SQL, display results, and auto-generate charts.
 

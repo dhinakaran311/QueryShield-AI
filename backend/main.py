@@ -232,3 +232,47 @@ def generate_sql_endpoint(req: SQLRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Operation failed: {str(e)}")
+
+
+@app.post("/execute-sql", tags=["SQL Execution"])
+def execute_sql_endpoint(req: SQLRequest):
+    """
+    Execute a validated SELECT query and return results.
+    Phase 6: Result processing & data extraction.
+    """
+    if not req.last_sql:
+        raise HTTPException(status_code=400, detail="SQL query is required.")
+
+    # 1. Security check (Phase 5)
+    sec_check = validate_sql(req.last_sql)
+    if not sec_check["is_safe"]:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "Security Violation", "reason": sec_check["reason"]}
+        )
+
+    try:
+        # 2. Execute query (Phase 6)
+        from backend.database import execute_query
+        rows = execute_query(req.last_sql)
+        
+        if not rows:
+            return {
+                "success": True,
+                "data":    [],
+                "columns": [],
+                "count":   0,
+                "message": "Query executed successfully. No rows returned."
+            }
+
+        # Extract column names from first row
+        columns = list(rows[0].keys())
+        
+        return {
+            "success": True,
+            "data":    rows,
+            "columns": columns,
+            "count":   len(rows)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")

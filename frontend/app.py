@@ -120,5 +120,101 @@ try:
 except requests.exceptions.ConnectionError:
     st.warning("⚠️ Backend not connected. Start the FastAPI server to see tables.")
 
+# ─── Query Interface (Phase 4 & 6) ──────────────────────────────────────────
 st.divider()
-st.caption("QueryShield AI v0.2.0 | Phase 2: CSV Upload System")
+st.header("💬 Ask your Data")
+st.info("QueryShield AI securely converts your question to SQL and visualizes the results.")
+
+user_question = st.text_input(
+    label       = "Enter your question in natural language",
+    placeholder = "e.g., Show total revenue by category",
+    help        = "The AI will generate a safe SELECT query to fetch answers."
+)
+
+col_q1, col_q2 = st.columns([1, 4])
+with col_q1:
+    ask_btn = st.button("🔍 Ask AI", use_container_width=True, type="primary")
+with col_q2:
+    if st.button("🗑️ Clear History"):
+        st.session_state["history"] = []
+        st.session_state["last_sql"] = None
+        st.session_state["last_nl"] = None
+
+# --- Visualization Logic ---
+def auto_detect_viz(df: pd.DataFrame):
+    """Auto-detect best visualization based on DataFrame structure."""
+    if df.empty:
+        st.warning("No data returned for this query.")
+        return
+
+    cols = df.columns.tolist()
+    num_cols = df.select_dtypes(include=['number']).columns.tolist()
+    date_cols = df.select_dtypes(include=['datetime', 'date']).columns.tolist()
+    cat_cols = [c for c in cols if c not in num_cols and c not in date_cols]
+
+    # CASE 1: Single numeric value (KPI Card)
+    if len(df) == 1 and len(num_cols) == 1 and len(cols) == 1:
+        st.metric(label=cols[0], value=f"{df.iloc[0, 0]:,}")
+    
+    # CASE 2: Time Series (Line Chart)
+    elif date_cols and num_cols:
+        st.subheader("📈 Trend Analysis")
+        st.line_chart(df.set_index(date_cols[0])[num_cols[0]])
+
+    # CASE 3: Categorical + Numeric (Bar Chart)
+    elif cat_cols and num_cols:
+        st.subheader("📊 Comparison")
+        # Use first categorical and first numeric
+        st.bar_chart(df.set_index(cat_cols[0])[num_cols[0]])
+    
+    # CASE 4: Default Table
+    else:
+        st.subheader("📋 Query Results")
+        st.dataframe(df, use_container_width=True)
+
+if ask_btn and user_question.strip():
+    with st.spinner("Shielding and querying..."):
+        try:
+            # 1. Generate SQL
+            gen_payload = {
+                "question": user_question,
+                "last_nl":  st.session_state.get("last_nl"),
+                "last_sql": st.session_state.get("last_sql")
+            }
+            gen_resp = requests.post(f"{API_URL}/generate-sql", json=gen_payload, timeout=30)
+            
+            if gen_resp.status_code == 200:
+                gen_data = gen_resp.json()
+                sql = gen_data["sql"]
+                st.code(sql, language="sql")
+                
+                # 2. Execute SQL
+                exec_payload = {"question": user_question, "last_sql": sql}
+                exec_resp = requests.post(f"{API_URL}/execute-sql", json=exec_payload, timeout=30)
+                
+                if exec_resp.status_code == 200:
+                    exec_data = exec_resp.json()
+                    results_df = pd.DataFrame(exec_data["data"])
+                    
+                    # Store for memory
+                    st.session_state["last_nl"] = user_question
+                    st.session_state["last_sql"] = sql
+                    
+                    # 3. Visualize
+                    auto_detect_viz(results_df)
+                    
+                    with st.expander("Show Raw Data"):
+                        st.write(results_df)
+
+                elif exec_resp.status_code == 403:
+                    st.error(f"🛡️ Security Block: {exec_resp.json()['detail']['reason']}")
+                else:
+                    st.error(f"❌ Execution failed: {exec_resp.json().get('detail', 'Unknown error')}")
+            else:
+                st.error(f"❌ AI Generation failed: {gen_resp.json().get('detail', 'Unknown error')}")
+                
+        except Exception as e:
+            st.error(f"⚠️ Error: {str(e)}")
+
+st.divider()
+st.caption("QueryShield AI v0.3.0 | Phase 6: Query Execution & Visualization")
