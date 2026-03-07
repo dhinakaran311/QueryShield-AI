@@ -175,10 +175,11 @@ def get_schema_prompt():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ─── Phase 4: LLM SQL Generation ─────────────────────────────────────────────
+# ─── Phase 4 & 5: LLM SQL Generation & Security ──────────────────────────────
 from pydantic import BaseModel
 from typing import Optional
 from backend.sql_generator import generate_sql as llm_generate_sql
+from backend.security import validate_sql
 
 
 class SQLRequest(BaseModel):
@@ -192,24 +193,42 @@ def generate_sql_endpoint(req: SQLRequest):
     """
     Convert a natural language question to a PostgreSQL SELECT query.
 
-    - Uses Gemini 1.5 Flash with full schema context
-    - Supports follow-up queries via last_nl + last_sql
-    - Returns SELECT-only SQL
+    - Uses Gemini 2.0 / Ollama with full schema context
+    - Returns SELECT-only SQL (validated via security layer)
     """
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
+    
     try:
+        # 1. Generate SQL from LLM
         result = llm_generate_sql(
             user_question = req.question,
             last_nl       = req.last_nl,
             last_sql      = req.last_sql,
         )
+        sql = result["sql"]
+
+        # 2. Security Validation (Phase 5)
+        sec_check = validate_sql(sql)
+        if not sec_check["is_safe"]:
+            raise HTTPException(
+                status_code = 403,
+                detail      = {
+                    "error":  "Security Violation",
+                    "reason": sec_check["reason"],
+                    "sql":    sql
+                }
+            )
+
         return {
             "success":     True,
             "question":    req.question,
-            "sql":         result["sql"],
+            "sql":         sql,
             "is_followup": result["is_followup"],
             "schema_used": result["schema_used"],
+            "security":    "passed"
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SQL generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Operation failed: {str(e)}")
