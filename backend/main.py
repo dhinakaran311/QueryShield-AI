@@ -178,7 +178,14 @@ def get_schema_prompt():
 # ─── Phase 4: LLM SQL Generation ─────────────────────────────────────────────
 from pydantic import BaseModel
 from typing import Optional
+<<<<<<< Updated upstream
 from backend.sql_generator import generate_sql as llm_generate_sql
+=======
+import sqlalchemy.exc
+from backend.sql_generator import generate_sql as llm_generate_sql, correct_sql
+from backend.security import validate_sql
+from backend.optimizer import optimize_sql
+>>>>>>> Stashed changes
 
 
 class SQLRequest(BaseModel):
@@ -210,6 +217,109 @@ def generate_sql_endpoint(req: SQLRequest):
             "sql":         result["sql"],
             "is_followup": result["is_followup"],
             "schema_used": result["schema_used"],
+<<<<<<< Updated upstream
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SQL generation failed: {str(e)}")
+=======
+            "security":    "passed"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Operation failed: {str(e)}")
+
+
+@app.post("/execute-sql", tags=["SQL Execution"])
+def execute_sql_endpoint(req: SQLRequest):
+    """
+    Execute a validated SELECT query and return results.
+    Phase 6: Result processing & data extraction.
+    """
+    if not req.last_sql:
+        raise HTTPException(status_code=400, detail="SQL query is required.")
+
+    # 1. Security check (Phase 5)
+    sec_check = validate_sql(req.last_sql)
+    if not sec_check["is_safe"]:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "Security Violation", "reason": sec_check["reason"]}
+        )
+
+    from backend.database import execute_query
+
+    # 2. Cost Optimization (Phase 8)
+    opt = optimize_sql(req.last_sql)
+    sql_to_run  = opt["sql"]
+    query_cost  = opt["query_cost"]
+    cost_level  = opt["cost_level"]
+    cost_label  = opt["cost_label"]
+    was_optimized = opt["was_optimized"]
+
+    def _run(sql):
+        return execute_query(sql)
+
+    try:
+        rows = _run(sql_to_run)
+    except (sqlalchemy.exc.ProgrammingError, sqlalchemy.exc.OperationalError) as e:
+        error_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        try:
+            fixed_sql = correct_sql(sql_to_run, error_msg)
+            rows = _run(fixed_sql)
+        except Exception as inner:
+            raise HTTPException(status_code=500, detail=f"Execution failed after correction attempt: {str(inner)}")
+        if not rows:
+            return {
+                "success":        True,
+                "data":           [],
+                "columns":        [],
+                "count":          0,
+                "was_corrected":  True,
+                "corrected_sql":  fixed_sql,
+                "query_cost":     query_cost,
+                "cost_level":     cost_level,
+                "cost_label":     cost_label,
+                "was_optimized":  was_optimized,
+                "message":        "Query auto-corrected and executed. No rows returned."
+            }
+        return {
+            "success":        True,
+            "data":           rows,
+            "columns":        list(rows[0].keys()),
+            "count":          len(rows),
+            "was_corrected":  True,
+            "corrected_sql":  fixed_sql,
+            "query_cost":     query_cost,
+            "cost_level":     cost_level,
+            "cost_label":     cost_label,
+            "was_optimized":  was_optimized,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+
+    if not rows:
+        return {
+            "success":        True,
+            "data":           [],
+            "columns":        [],
+            "count":          0,
+            "was_corrected":  False,
+            "query_cost":     query_cost,
+            "cost_level":     cost_level,
+            "cost_label":     cost_label,
+            "was_optimized":  was_optimized,
+            "message":        "Query executed successfully. No rows returned."
+        }
+    return {
+        "success":        True,
+        "data":           rows,
+        "columns":        list(rows[0].keys()),
+        "count":          len(rows),
+        "was_corrected":  False,
+        "query_cost":     query_cost,
+        "cost_level":     cost_level,
+        "cost_label":     cost_label,
+        "was_optimized":  was_optimized,
+    }
+>>>>>>> Stashed changes

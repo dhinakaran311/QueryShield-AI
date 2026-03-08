@@ -158,3 +158,24 @@ def generate_sql(
         "provider":    LLM_PROVIDER,
         "model":       OLLAMA_MODEL if LLM_PROVIDER == "ollama" else "gemini-2.0-flash",
     }
+
+
+CORRECTION_PROMPT = """The following SQL query failed with an error:
+
+SQL: {original_sql}
+Error: {error_message}
+
+Fix the SQL query. Return ONLY the corrected SQL.
+Corrected SQL:"""
+
+
+def correct_sql(original_sql: str, error_message: str) -> str:
+    prompt = CORRECTION_PROMPT.format(
+        original_sql=original_sql,
+        error_message=error_message,
+    )
+    if LLM_PROVIDER == "gemini":
+        raw = _call_gemini(prompt)
+    else:
+        raw = _call_ollama(prompt)
+    return _clean_sql(raw)
