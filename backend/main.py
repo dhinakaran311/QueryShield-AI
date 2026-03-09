@@ -178,9 +178,10 @@ def get_schema_prompt():
 # ─── Phase 4 & 5: LLM SQL Generation & Security ──────────────────────────────
 from pydantic import BaseModel
 from typing import Optional
-from backend.sql_generator import generate_sql as llm_generate_sql
+import sqlalchemy.exc
+from backend.sql_generator import generate_sql as llm_generate_sql, correct_sql
 from backend.security import validate_sql
-
+from backend.optimizer import optimize_sql
 
 class SQLRequest(BaseModel):
     question: str
@@ -251,28 +252,78 @@ def execute_sql_endpoint(req: SQLRequest):
             detail={"error": "Security Violation", "reason": sec_check["reason"]}
         )
 
+    from backend.database import execute_query
+
+    # 2. Cost Optimization (Phase 8)
+    opt = optimize_sql(req.last_sql)
+    sql_to_run  = opt["sql"]
+    query_cost  = opt["query_cost"]
+    cost_level  = opt["cost_level"]
+    cost_label  = opt["cost_label"]
+    was_optimized = opt["was_optimized"]
+
+    def _run(sql):
+        return execute_query(sql)
+
     try:
-        # 2. Execute query (Phase 6)
-        from backend.database import execute_query
-        rows = execute_query(req.last_sql)
-        
+        rows = _run(sql_to_run)
+    except (sqlalchemy.exc.ProgrammingError, sqlalchemy.exc.OperationalError) as e:
+        error_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        try:
+            fixed_sql = correct_sql(sql_to_run, error_msg)
+            rows = _run(fixed_sql)
+        except Exception as inner:
+            raise HTTPException(status_code=500, detail=f"Execution failed after correction attempt: {str(inner)}")
         if not rows:
             return {
-                "success": True,
-                "data":    [],
-                "columns": [],
-                "count":   0,
-                "message": "Query executed successfully. No rows returned."
+                "success":        True,
+                "data":           [],
+                "columns":        [],
+                "count":          0,
+                "was_corrected":  True,
+                "corrected_sql":  fixed_sql,
+                "query_cost":     query_cost,
+                "cost_level":     cost_level,
+                "cost_label":     cost_label,
+                "was_optimized":  was_optimized,
+                "message":        "Query auto-corrected and executed. No rows returned."
             }
-
-        # Extract column names from first row
-        columns = list(rows[0].keys())
-        
         return {
-            "success": True,
-            "data":    rows,
-            "columns": columns,
-            "count":   len(rows)
+            "success":        True,
+            "data":           rows,
+            "columns":        list(rows[0].keys()),
+            "count":          len(rows),
+            "was_corrected":  True,
+            "corrected_sql":  fixed_sql,
+            "query_cost":     query_cost,
+            "cost_level":     cost_level,
+            "cost_label":     cost_label,
+            "was_optimized":  was_optimized,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+
+    if not rows:
+        return {
+            "success":        True,
+            "data":           [],
+            "columns":        [],
+            "count":          0,
+            "was_corrected":  False,
+            "query_cost":     query_cost,
+            "cost_level":     cost_level,
+            "cost_label":     cost_label,
+            "was_optimized":  was_optimized,
+            "message":        "Query executed successfully. No rows returned."
+        }
+    return {
+        "success":        True,
+        "data":           rows,
+        "columns":        list(rows[0].keys()),
+        "count":          len(rows),
+        "was_corrected":  False,
+        "query_cost":     query_cost,
+        "cost_level":     cost_level,
+        "cost_label":     cost_label,
+        "was_optimized":  was_optimized,
+    }

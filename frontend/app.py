@@ -195,14 +195,23 @@ if ask_btn and user_question.strip():
                 if exec_resp.status_code == 200:
                     exec_data = exec_resp.json()
                     results_df = pd.DataFrame(exec_data["data"])
-                    
+                    if exec_data.get("was_corrected"):
+                        st.info("⚙️ AI auto-corrected the query")
+                        st.code(exec_data.get("corrected_sql", ""), language="sql")
+
+                    cost_label = exec_data.get("cost_label", "🟢 Low")
+                    query_cost = exec_data.get("query_cost", 0)
+                    st.metric("Query Cost", cost_label, help=f"Raw cost: {query_cost:.1f}")
+                    if exec_data.get("was_optimized"):
+                        st.info("⚡ Query was auto-optimized for performance")
+
                     # Store for memory
                     st.session_state["last_nl"] = user_question
-                    st.session_state["last_sql"] = sql
-                    
+                    st.session_state["last_sql"] = exec_data.get("corrected_sql", sql) if exec_data.get("was_corrected") else sql
+
                     # 3. Visualize
                     auto_detect_viz(results_df)
-                    
+
                     with st.expander("Show Raw Data"):
                         st.write(results_df)
 
