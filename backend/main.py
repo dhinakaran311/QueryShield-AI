@@ -178,20 +178,17 @@ def get_schema_prompt():
 # ─── Phase 4: LLM SQL Generation ─────────────────────────────────────────────
 from pydantic import BaseModel
 from typing import Optional
-<<<<<<< Updated upstream
-from backend.sql_generator import generate_sql as llm_generate_sql
-=======
 import sqlalchemy.exc
 from backend.sql_generator import generate_sql as llm_generate_sql, correct_sql
-from backend.security import validate_sql
 from backend.optimizer import optimize_sql
->>>>>>> Stashed changes
+from backend.access_control import check_table_access, mask_columns
 
 
 class SQLRequest(BaseModel):
     question: str
     last_nl:  Optional[str] = None
     last_sql: Optional[str] = None
+    role:     Optional[str] = "Admin"
 
 
 @app.post("/generate-sql", tags=["SQL Generation"])
@@ -217,11 +214,6 @@ def generate_sql_endpoint(req: SQLRequest):
             "sql":         result["sql"],
             "is_followup": result["is_followup"],
             "schema_used": result["schema_used"],
-<<<<<<< Updated upstream
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SQL generation failed: {str(e)}")
-=======
             "security":    "passed"
         }
     except HTTPException:
@@ -239,12 +231,13 @@ def execute_sql_endpoint(req: SQLRequest):
     if not req.last_sql:
         raise HTTPException(status_code=400, detail="SQL query is required.")
 
-    # 1. Security check (Phase 5)
-    sec_check = validate_sql(req.last_sql)
-    if not sec_check["is_safe"]:
+    # Phase 10: Role-based access control
+    role = req.role or "Admin"
+    access = check_table_access(role, req.last_sql)
+    if not access["is_allowed"]:
         raise HTTPException(
             status_code=403,
-            detail={"error": "Security Violation", "reason": sec_check["reason"]}
+            detail={"error": "Access Denied", "reason": access["reason"]}
         )
 
     from backend.database import execute_query
@@ -262,11 +255,15 @@ def execute_sql_endpoint(req: SQLRequest):
 
     try:
         rows = _run(sql_to_run)
+        from backend.memory import update_memory
+        update_memory(req.question, sql_to_run)
     except (sqlalchemy.exc.ProgrammingError, sqlalchemy.exc.OperationalError) as e:
         error_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
         try:
             fixed_sql = correct_sql(sql_to_run, error_msg)
             rows = _run(fixed_sql)
+            from backend.memory import update_memory
+            update_memory(req.question, fixed_sql)
         except Exception as inner:
             raise HTTPException(status_code=500, detail=f"Execution failed after correction attempt: {str(inner)}")
         if not rows:
@@ -283,11 +280,12 @@ def execute_sql_endpoint(req: SQLRequest):
                 "was_optimized":  was_optimized,
                 "message":        "Query auto-corrected and executed. No rows returned."
             }
+        masked_rows = mask_columns(role, rows)
         return {
             "success":        True,
-            "data":           rows,
-            "columns":        list(rows[0].keys()),
-            "count":          len(rows),
+            "data":           masked_rows,
+            "columns":        list(masked_rows[0].keys()),
+            "count":          len(masked_rows),
             "was_corrected":  True,
             "corrected_sql":  fixed_sql,
             "query_cost":     query_cost,
@@ -311,15 +309,15 @@ def execute_sql_endpoint(req: SQLRequest):
             "was_optimized":  was_optimized,
             "message":        "Query executed successfully. No rows returned."
         }
+    masked_rows = mask_columns(role, rows)
     return {
         "success":        True,
-        "data":           rows,
-        "columns":        list(rows[0].keys()),
-        "count":          len(rows),
+        "data":           masked_rows,
+        "columns":        list(masked_rows[0].keys()) if masked_rows else [],
+        "count":          len(masked_rows),
         "was_corrected":  False,
         "query_cost":     query_cost,
         "cost_level":     cost_level,
         "cost_label":     cost_label,
         "was_optimized":  was_optimized,
     }
->>>>>>> Stashed changes

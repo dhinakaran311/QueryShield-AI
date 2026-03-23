@@ -40,12 +40,34 @@ with st.sidebar:
         value       = "user",
         help        = "Tracked in metadata.",
     )
-    upload_btn = st.button("🚀 Upload & Create Table", use_container_width=True)
+    upload_btn = st.button("🚀 Upload & Create Table", width='stretch')
 
     st.divider()
     st.header("📋 Uploaded Tables")
-    if st.button("🔄 Refresh Table List", use_container_width=True):
+    if st.button("🔄 Refresh Table List", width='stretch'):
         st.session_state["refresh_tables"] = True
+
+    st.divider()
+    st.header("🧠 Memory Context")
+    if st.session_state.get("last_nl"):
+        st.info(f"**Previous Q:** {st.session_state['last_nl']}")
+        with st.expander("View SQL Memory"):
+            st.code(st.session_state.get("last_sql", ""), language="sql")
+    else:
+        st.caption("No active conversation.")
+
+    st.divider()
+    st.header("🔐 Access Role")
+    selected_role = st.selectbox(
+        label   = "Select your role",
+        options = ["Admin", "Analyst", "Viewer"],
+        index   = 0,
+        help    = "Admin: full access | Analyst: no HR/salary | Viewer: public only"
+    )
+    st.session_state["role"] = selected_role
+
+    role_badges = {"Admin": "🟢", "Analyst": "🟡", "Viewer": "🔴"}
+    st.caption(f"{role_badges.get(selected_role, '')} Active role: **{selected_role}**")
 
 # ─── Upload Logic ─────────────────────────────────────────────────────────────
 if upload_btn:
@@ -89,13 +111,13 @@ if "last_upload" in st.session_state:
         list(result["schema"].items()),
         columns=["Column Name", "PostgreSQL Type"]
     )
-    st.dataframe(schema_df, use_container_width=True, hide_index=True)
+    st.dataframe(schema_df, width='stretch', hide_index=True)
 
     # Preview uploaded data
     if "uploaded_file_bytes" in st.session_state:
         st.subheader("👁️ Data Preview (first 10 rows)")
         preview_df = pd.read_csv(io.BytesIO(st.session_state["uploaded_file_bytes"]))
-        st.dataframe(preview_df.head(10), use_container_width=True)
+        st.dataframe(preview_df.head(10), width='stretch')
 
 # Cache uploaded file bytes for preview
 if uploaded_file:
@@ -112,7 +134,7 @@ try:
         if tables:
             tables_df = pd.DataFrame(tables)
             tables_df["upload_time"] = pd.to_datetime(tables_df["upload_time"]).dt.strftime("%Y-%m-%d %H:%M")
-            st.dataframe(tables_df, use_container_width=True, hide_index=True)
+            st.dataframe(tables_df, width='stretch', hide_index=True)
         else:
             st.info("No tables uploaded yet. Upload a CSV to get started!")
     else:
@@ -133,7 +155,7 @@ user_question = st.text_input(
 
 col_q1, col_q2 = st.columns([1, 4])
 with col_q1:
-    ask_btn = st.button("🔍 Ask AI", use_container_width=True, type="primary")
+    ask_btn = st.button("🔍 Ask AI", width='stretch', type="primary")
 with col_q2:
     if st.button("🗑️ Clear History"):
         st.session_state["history"] = []
@@ -170,7 +192,7 @@ def auto_detect_viz(df: pd.DataFrame):
     # CASE 4: Default Table
     else:
         st.subheader("📋 Query Results")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
 
 if ask_btn and user_question.strip():
     with st.spinner("Shielding and querying..."):
@@ -181,16 +203,21 @@ if ask_btn and user_question.strip():
                 "last_nl":  st.session_state.get("last_nl"),
                 "last_sql": st.session_state.get("last_sql")
             }
-            gen_resp = requests.post(f"{API_URL}/generate-sql", json=gen_payload, timeout=30)
+            gen_resp = requests.post(f"{API_URL}/generate-sql", json=gen_payload, timeout=180)
             
             if gen_resp.status_code == 200:
                 gen_data = gen_resp.json()
                 sql = gen_data["sql"]
+                
+                if gen_data.get("is_followup"):
+                    st.success("💬 Smart Follow-up Detected – Refined previous query")
+                    
                 st.code(sql, language="sql")
                 
                 # 2. Execute SQL
-                exec_payload = {"question": user_question, "last_sql": sql}
-                exec_resp = requests.post(f"{API_URL}/execute-sql", json=exec_payload, timeout=30)
+                current_role = st.session_state.get("role", "Admin")
+                exec_payload = {"question": user_question, "last_sql": sql, "role": current_role}
+                exec_resp = requests.post(f"{API_URL}/execute-sql", json=exec_payload, timeout=180)
                 
                 if exec_resp.status_code == 200:
                     exec_data = exec_resp.json()
@@ -227,4 +254,4 @@ if ask_btn and user_question.strip():
             st.error(f"⚠️ Error: {str(e)}")
 
 st.divider()
-st.caption("QueryShield AI v0.3.0 | Phase 6: Query Execution & Visualization")
+st.caption("QueryShield AI v0.4.0 | Phase 9: Conversational Memory")
