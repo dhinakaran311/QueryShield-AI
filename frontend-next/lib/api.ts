@@ -70,3 +70,5 @@ export const uploadCsv = (
 
 export const getSchema = () => API.get("/schema");
 export const getHealth = () => API.get("/health");
+export const clearMemory = (sessionId: string = "default") =>
+  API.post("/clear-memory", null, { params: { session_id: sessionId } });

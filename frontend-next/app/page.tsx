@@ -9,7 +9,7 @@ import ResultsTable from "@/components/ResultsTable";
 import ChartView from "@/components/ChartView";
 import MemorySidebar from "@/components/MemorySidebar";
 import CsvUpload from "@/components/CsvUpload";
-import { generateSql, executeSql, ExecuteSqlResponse } from "@/lib/api";
+import { generateSql, executeSql, clearMemory, ExecuteSqlResponse } from "@/lib/api";
 import { Wrench, Zap, MessagesSquare, AlertTriangle } from "lucide-react";
 
 export default function HomePage() {
@@ -26,22 +26,16 @@ export default function HomePage() {
     setLoading(true);
     setError(null);
     setExecResult(null);
-
     try {
-      // 1. Generate SQL
       const genRes = await generateSql(question, lastNl, lastSql, role);
       const generatedSql = genRes.data.sql;
       setSql(generatedSql);
       setIsFollowup(genRes.data.is_followup);
 
-      // 2. Execute SQL
       const execRes = await executeSql(question, generatedSql, role);
       setExecResult(execRes.data);
 
-      // 3. Update memory
-      const finalSql = execRes.data.was_corrected
-        ? (execRes.data.corrected_sql ?? generatedSql)
-        : generatedSql;
+      const finalSql = execRes.data.was_corrected ? (execRes.data.corrected_sql ?? generatedSql) : generatedSql;
       setLastNl(question);
       setLastSql(finalSql);
     } catch (err: unknown) {
@@ -56,58 +50,61 @@ export default function HomePage() {
     }
   };
 
-  const handleClear = () => {
-    setSql(null);
-    setExecResult(null);
-    setError(null);
-    setLastNl(null);
-    setLastSql(null);
-    setIsFollowup(false);
+  const handleClear = async () => {
+    try {
+      await clearMemory("default");
+    } catch (e) {
+      console.error("Clear memory error:", e);
+    }
+    setSql(null); setExecResult(null); setError(null);
+    setLastNl(null); setLastSql(null); setIsFollowup(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50">
       <Navbar role={role} />
 
       <div className="max-w-7xl mx-auto px-6 py-8 flex gap-6">
         {/* Sidebar */}
         <aside className="w-64 shrink-0 space-y-6">
-          <RoleSelector role={role} onChange={setRole} />
-          <div className="border-t border-slate-800" />
-          <MemorySidebar lastNl={lastNl} lastSql={lastSql} />
-          <div className="border-t border-slate-800" />
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Upload CSV</p>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+            <RoleSelector role={role} onChange={setRole} />
+            <div className="border-t border-slate-100" />
+            <MemorySidebar lastNl={lastNl} lastSql={lastSql} />
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Upload CSV</p>
             <CsvUpload />
           </div>
         </aside>
 
-        {/* Main content */}
-        <main className="flex-1 min-w-0 space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white mb-1">Ask your Data</h1>
-            <p className="text-sm text-slate-400">
-              Ask anything in plain English. QueryShield AI generates, secures, optimizes, and corrects your SQL automatically.
+        {/* Main */}
+        <main className="flex-1 min-w-0 space-y-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <h1 className="text-xl font-bold text-slate-800 mb-1">
+              Ask your <span className="text-violet-600">Data</span>
+            </h1>
+            <p className="text-sm text-slate-400 mb-5">
+              Plain English → SQL. Secured, optimized, and self-correcting.
             </p>
+            <QueryInput onSubmit={handleQuery} onClear={handleClear} loading={loading} />
           </div>
-
-          <QueryInput onSubmit={handleQuery} onClear={handleClear} loading={loading} />
 
           {/* Badges */}
           {(isFollowup || execResult?.was_corrected || execResult?.was_optimized) && (
             <div className="flex flex-wrap gap-2">
               {isFollowup && (
-                <span className="flex items-center gap-1 text-xs bg-violet-900/40 text-violet-300 border border-violet-800 px-2.5 py-1 rounded-full">
+                <span className="flex items-center gap-1 text-xs bg-violet-50 text-violet-600 border border-violet-200 px-2.5 py-1 rounded-full font-medium">
                   <MessagesSquare size={12} /> Smart follow-up detected
                 </span>
               )}
               {execResult?.was_corrected && (
-                <span className="flex items-center gap-1 text-xs bg-blue-900/40 text-blue-300 border border-blue-800 px-2.5 py-1 rounded-full">
+                <span className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
                   <Wrench size={12} /> Auto-corrected
                 </span>
               )}
               {execResult?.was_optimized && (
-                <span className="flex items-center gap-1 text-xs bg-amber-900/40 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+                <span className="flex items-center gap-1 text-xs bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-1 rounded-full font-medium">
                   <Zap size={12} /> Auto-optimized
                 </span>
               )}
@@ -116,7 +113,7 @@ export default function HomePage() {
 
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-xl p-4 text-sm">
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-600 rounded-xl p-4 text-sm">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               {error}
             </div>
@@ -128,14 +125,12 @@ export default function HomePage() {
             <SqlDisplay sql={execResult.corrected_sql} label="✅ Corrected SQL" />
           )}
 
-          {/* Cost badge */}
+          {/* Cost */}
           {execResult && (
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-slate-400">Query Cost:</span>
-              <span className="font-semibold">{execResult.cost_label}</span>
-              <span className="text-xs text-slate-600">
-                (raw: {execResult.query_cost?.toFixed(1) ?? "N/A"})
-              </span>
+            <div className="flex items-center gap-3 text-sm text-slate-500">
+              <span>Query Cost:</span>
+              <span className="font-semibold text-slate-700">{execResult.cost_label}</span>
+              <span className="text-xs text-slate-400">(raw: {execResult.query_cost?.toFixed(1) ?? "N/A"})</span>
             </div>
           )}
 
@@ -143,14 +138,14 @@ export default function HomePage() {
           {execResult?.data && execResult.data.length > 0 && (
             <>
               <ChartView data={execResult.data} columns={execResult.columns} />
-              <ResultsTable data={execResult.data} columns={execResult.columns} />
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                <ResultsTable data={execResult.data} columns={execResult.columns} />
+              </div>
             </>
           )}
 
           {execResult?.message && !execResult.data?.length && (
-            <div className="text-slate-500 text-sm text-center py-8">
-              {execResult.message}
-            </div>
+            <div className="text-slate-400 text-sm text-center py-8">{execResult.message}</div>
           )}
 
           {loading && (

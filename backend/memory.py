@@ -36,6 +36,12 @@ def get_last_query(session_id: str) -> Optional[Dict]:
     return _memory_store.get(session_id, None)
 
 
+def clear_memory(session_id: str = "default") -> None:
+    """Wipe the memory for a specific session."""
+    if session_id in _memory_store:
+        del _memory_store[session_id]
+
+
 def merge_followup_query(previous_sql: str, followup_question: str) -> str:
     """
     Combine a previous SQL query with a follow-up question into a

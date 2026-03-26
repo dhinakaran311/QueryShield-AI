@@ -261,9 +261,18 @@ def execute_sql_endpoint(req: SQLRequest):
         error_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
         try:
             fixed_sql = correct_sql(sql_to_run, error_msg)
+            
+            # Re-validate corrected SQL for security
+            from backend.security import validate_sql
+            sec = validate_sql(fixed_sql)
+            if not sec["is_safe"]:
+                raise HTTPException(status_code=403, detail=f"Blocked: Corrected SQL is unsafe - {sec['reason']}")
+
             rows = _run(fixed_sql)
             from backend.memory import update_memory
             update_memory(req.question, fixed_sql)
+        except HTTPException:
+            raise
         except Exception as inner:
             raise HTTPException(status_code=500, detail=f"Execution failed after correction attempt: {str(inner)}")
         if not rows:
@@ -321,3 +330,11 @@ def execute_sql_endpoint(req: SQLRequest):
         "cost_label":     cost_label,
         "was_optimized":  was_optimized,
     }
+
+
+@app.post("/clear-memory", tags=["Memory"])
+def clear_memory_endpoint(session_id: str = "default"):
+    """Wipe the current conversation context."""
+    from backend.memory import clear_memory
+    clear_memory(session_id)
+    return {"success": True, "message": "Memory cleared."}

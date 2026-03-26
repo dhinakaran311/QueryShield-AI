@@ -14,12 +14,12 @@ ROLE_PERMISSIONS = {
         "blocked_columns": [],         # Admin sees all columns
     },
     "Analyst": {
-        "blocked_tables": ["hr", "employees", "payroll"],  # No HR tables
-        "blocked_columns": ["salary", "ssn"],
+        "blocked_tables": ["hr", "employees", "payroll", "secret_deals"],
+        "blocked_columns": ["salary", "ssn", "profit", "customer_name"],
     },
     "Viewer": {
-        "blocked_tables": ["hr", "employees", "payroll", "orders", "transactions"],
-        "blocked_columns": ["email", "salary", "ssn"],
+        "blocked_tables": ["hr", "employees", "payroll"], # Viewer is banned from HR
+        "blocked_columns": ["email", "salary", "ssn", "profit", "customer_name", "customer_id"],
     },
 }
 
