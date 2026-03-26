@@ -1,40 +1,86 @@
 """
 backend/memory.py
-Phase 9 — Conversational Memory logic for tracking context and detecting follow-up cues.
+Phase 9 — Conversational Memory
+Maintains per-session query context for follow-up question support.
 """
 
 import re
 from typing import Optional, Dict
+from datetime import datetime
 
-# Global memory dictionary (in-memory storage for MVP)
-memory_store: Dict[str, Optional[str]] = {
-    "last_nl": None,
-    "last_sql": None
-}
-
-
-def update_memory(last_nl: str, last_sql: str) -> None:
-    """Store the latest successful question and generated SQL."""
-    memory_store["last_nl"] = last_nl
-    memory_store["last_sql"] = last_sql
+# ─── In-memory store (keyed by session_id) ────────────────────────────────────
+# Structure: { session_id: { "question": str, "sql": str, "timestamp": str } }
+_memory_store: Dict[str, Dict] = {}
 
 
-def get_memory() -> Dict[str, Optional[str]]:
-    """Retrieve the current memory state."""
-    return memory_store
+# ─── Required API Functions ───────────────────────────────────────────────────
 
+def save_query_context(session_id: str, question: str, sql: str) -> None:
+    """
+    Save the latest query context for a given session.
+    Stores session_id, user_question, generated_sql, and timestamp.
+    """
+    _memory_store[session_id] = {
+        "session_id": session_id,
+        "question":   question,
+        "sql":        sql,
+        "timestamp":  datetime.now().isoformat(),
+    }
+
+
+def get_last_query(session_id: str) -> Optional[Dict]:
+    """
+    Retrieve the last stored query context for a given session.
+    Returns None if no context exists yet.
+    """
+    return _memory_store.get(session_id, None)
+
+
+def merge_followup_query(previous_sql: str, followup_question: str) -> str:
+    """
+    Combine a previous SQL query with a follow-up question into a
+    single LLM prompt string that can be sent for SQL refinement.
+
+    Example:
+        previous_sql      = "SELECT * FROM sales WHERE year=2025"
+        followup_question = "Only January"
+        → prompt string ready to be passed to the LLM
+    """
+    return (
+        f"Previous SQL: {previous_sql}\n"
+        f"Follow-up question: {followup_question}\n"
+        f"Modify the previous SQL to satisfy the follow-up. "
+        f"Return ONLY the modified SELECT query ending with a semicolon."
+    )
+
+
+# ─── Legacy helpers (backwards compatible with existing code) ─────────────────
+
+def update_memory(last_nl: str, last_sql: str, session_id: str = "default") -> None:
+    """Convenience wrapper — saves context using the default session."""
+    save_query_context(session_id, last_nl, last_sql)
+
+
+def get_memory(session_id: str = "default") -> Dict:
+    """Convenience wrapper — retrieves context for the default session."""
+    ctx = get_last_query(session_id)
+    if ctx:
+        return {"last_nl": ctx["question"], "last_sql": ctx["sql"]}
+    return {"last_nl": None, "last_sql": None}
+
+
+# ─── Follow-up detection ──────────────────────────────────────────────────────
 
 def is_followup(question: str) -> bool:
     """
-    Intelligently detect if a question is a follow-up to the previous context.
-    Looks for conversational cues vs completely new standalone questions.
+    Detect if a question is a follow-up to the previous context
+    by looking for conversational cues.
     """
     if not isinstance(question, str) or not question.strip():
         return False
-        
+
     lower_q = question.lower().strip()
-    
-    # Common follow-up prefix words/phrases
+
     follow_up_cues = [
         r"^only\b",
         r"^also\b",
@@ -49,17 +95,14 @@ def is_followup(question: str) -> bool:
         r"^order by\b",
         r"^sort by\b",
         r"^group by\b",
-        r"for\b" # Often used like "for 2025"
+        r"for\b",
     ]
-    
-    # Check if the question starts with any cue or is very short (likely refining a previous query)
+
     if any(re.search(cue, lower_q) for cue in follow_up_cues):
         return True
-        
-    # If the text is very short (e.g., "India", "in 2024", "top 5"), it relies on context.
-    # We consider < 5 words a high likelihood of being a follow-up refinement.
+
     word_count = len(lower_q.split())
     if word_count < 5 and "show" not in lower_q and "select" not in lower_q and "get" not in lower_q:
         return True
-        
+
     return False
