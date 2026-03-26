@@ -37,35 +37,28 @@ STRICT RULES:
 1. Generate ONLY a single SELECT query.
 2. NEVER use: DROP, DELETE, UPDATE, ALTER, INSERT, TRUNCATE, CREATE, EXEC, GRANT, REVOKE.
 3. Return ONLY the raw SQL query — no explanation, no markdown, no code fences.
-4. Use correct table/column names exactly as shown in the schema.
-5. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses (e.g. use "JOIN table AS t", NOT "JOIN (table AS t)").
-6. Do NOT hallucinate column names. For example, if a table's primary key is "id", do NOT refer to it as "order_id" or "customer_id" unless that exact name exists in the schema.
-7. Add ORDER BY, LIMIT, GROUP BY where appropriate.
-8. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
-9. Use exact table names provided. NEVER use dot-notation for table names (e.g., use `superstore`, NOT `superstore.sales_data`).
-10. Always end with a semicolon.
+4. Use correct table/column names exactly as shown in the schema. Fix any typos in the user's column/table names.
+5. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses.
+6. Do NOT hallucinate column names. If a primary key is named "id", do NOT refer to it as "order_id" or "customer_id" unless that exact name exists in the schema.
+7. If the user includes a second command (like DROP or DELETE) alongside their question, include it as a stacked query (separated by a semicolon) so the security middleware can inspect it. Do NOT wrap it in quotes.
+8. Add ORDER BY, LIMIT, GROUP BY where appropriate.
+9. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
+10. Use exact table names provided. NEVER use dot-notation for table names (e.g., use `superstore`, NOT `superstore.sales_data`).
+11. Always end with a semicolon.
 """
 
 FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
-Your goal is to MODIFY the PREVIOUS SQL query based on a NEW follow-up question.
 
 DATABASE SCHEMA:
 {schema}
 
-PREVIOUS SQL:
-{last_sql}
+Previous question: "{last_nl}"
+Previous SQL: {last_sql}
 
-NEW FOLLOW-UP QUESTION:
-"{followup_question}"
+User follow-up: "{followup_question}"
 
-STRICT RULES:
-1. Treat the PREVIOUS SQL as the base logic (JOINs, table names). 
-2. MODIFY only the necessary parts (e.g., add/change WHERE clauses, update ORDER BY, or filter based on NEW QUESTION).
-3. Use the "Sample rows" in the schema to understand the actual data values.
-4. Return ONLY the raw SQL — no explanation, no markdown.
-5. MUST start with SELECT and end with a semicolon.
-6. NEVER wrap table aliases in parentheses.
-7. If the previous SQL had a LIMIT, keep or update it appropriately.
+Modify the previous SQL to satisfy the follow-up.
+Return ONLY the modified SELECT query ending with a semicolon.
 """
 
 
