@@ -147,7 +147,7 @@ def generate_sql(
       "ollama" → local (no rate limits)
       "gemini" → Gemini 2.0 Flash
     """
-    schema      = get_full_schema()
+    schema      = get_full_schema(user_question)
     schema_text = build_schema_prompt(schema)
     
     from backend.memory import is_followup as detect_followup

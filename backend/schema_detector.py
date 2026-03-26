@@ -98,8 +98,9 @@ def get_foreign_keys() -> list[dict]:
 
 
 # ─── 4. Full schema context (for LLM injection) ───────────────────────────────
+import re
 
-def get_full_schema() -> dict:
+def get_full_schema(query: str = None) -> dict:
     """
     Build a complete schema context dict:
     {
@@ -117,11 +118,26 @@ def get_full_schema() -> dict:
     }
     """
     tables = get_all_tables()
+    
+    # If a query is provided, aggressive filtering for local 1.5B models
+    if query:
+        query_words = set(re.findall(r'\b\w+\b', query.lower()))
+        matched_tables = [t for t in tables if t.lower() in query_words]
+        if matched_tables:
+            tables = matched_tables
+
     schema = {}
     for table in tables:
         schema[table] = get_table_columns(table)
 
     foreign_keys = get_foreign_keys()
+    
+    # Filter FKs to only include relationships between matched tables
+    if query and tables:
+        foreign_keys = [
+            fk for fk in foreign_keys 
+            if fk["table"] in tables and fk["references_table"] in tables
+        ]
 
     return {
         "tables":       schema,
