@@ -260,7 +260,17 @@ def execute_sql_endpoint(req: SQLRequest):
     except (sqlalchemy.exc.ProgrammingError, sqlalchemy.exc.OperationalError) as e:
         error_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
         try:
-            fixed_sql = correct_sql(sql_to_run, error_msg)
+            # Provide schema context to correction engine
+            from backend.memory import get_memory
+            mem = get_memory()
+            lnl, lsql = mem["last_nl"], mem["last_sql"]
+            
+            from backend.schema_detector import get_full_schema, build_schema_prompt
+            ctx = [req.question, lnl, lsql]
+            schema_info = get_full_schema(ctx)
+            schema_text = build_schema_prompt(schema_info)
+            
+            fixed_sql = correct_sql(sql_to_run, error_msg, schema_text)
             
             # Re-validate corrected SQL for security
             from backend.security import validate_sql

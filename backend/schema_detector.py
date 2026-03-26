@@ -49,6 +49,15 @@ def get_table_columns(table_name: str) -> list[dict]:
     """
     with engine.connect() as conn:
         rows = conn.execute(text(sql), {"tname": table_name}).fetchall()
+        
+        # Also fetch a few sample rows to help the LLM understand the data
+        sample_sql = f'SELECT * FROM "{table_name}" LIMIT 3'
+        try:
+            sample_rows = conn.execute(text(sample_sql)).fetchall()
+            samples = [str(dict(r._mapping)) for r in sample_rows]
+        except:
+            samples = []
+
     return [
         {
             "column_name":    row[0],
@@ -57,7 +66,7 @@ def get_table_columns(table_name: str) -> list[dict]:
             "column_default": row[3],
         }
         for row in rows
-    ]
+    ], samples
 
 
 # ─── 3. Foreign key relationships ────────────────────────────────────────────
@@ -107,23 +116,31 @@ def get_full_schema(context_strings: list[str] = None) -> dict:
     """
     tables = get_all_tables()
     
-    if context_strings:
-        # Combine all context into one lowercase blob
-        blob = " ".join([s for s in context_strings if s]).lower()
-        query_words = set(re.findall(r'\b\w+\b', blob))
+    if context_strings and context_strings[0]:
+        current_q = context_strings[0].lower()
+        current_words = set(re.findall(r'\b\w+\b', current_q))
         
-        # Match if table name or its substring is in the query (handle simple plurals/stems)
-        matched_tables = [
-            t for t in tables 
-            if t.lower() in query_words or any(t.lower() in w for w in query_words)
-        ]
-        
-        if matched_tables:
-            tables = matched_tables
+        # 1. Check if the current question explicitly mentions a table
+        direct_matches = [t for t in tables if t.lower() in current_words]
+        if direct_matches:
+            tables = direct_matches
+        else:
+            # 2. Fall back to wider context (history) if no direct match in current Q
+            blob = " ".join([s for s in context_strings if s]).lower()
+            query_words = set(re.findall(r'\b\w+\b', blob))
+            matched_tables = [
+                t for t in tables 
+                if t.lower() in query_words or any(t.lower() in w for w in query_words)
+            ]
+            if matched_tables:
+                tables = matched_tables
 
     schema = {}
+    samples_map = {}
     for table in tables:
-        schema[table] = get_table_columns(table)
+        cols, samples = get_table_columns(table)
+        schema[table] = cols
+        samples_map[table] = samples
 
     foreign_keys = get_foreign_keys()
     
@@ -136,6 +153,7 @@ def get_full_schema(context_strings: list[str] = None) -> dict:
 
     return {
         "tables":       schema,
+        "samples":      samples_map,
         "foreign_keys": foreign_keys,
     }
 
@@ -145,14 +163,7 @@ def get_full_schema(context_strings: list[str] = None) -> dict:
 def build_schema_prompt(schema: dict) -> str:
     """
     Convert the schema dict into a clean text block for LLM system prompts.
-
-    Example output:
-        Table: customers
-          - id (integer)
-          - name (text)
-          ...
-        Foreign Keys:
-          - orders.customer_id → customers.id
+    Includes sample rows to help LLM understand the data content.
     """
     lines = []
 
@@ -161,6 +172,13 @@ def build_schema_prompt(schema: dict) -> str:
         for col in columns:
             nullable = "" if col["is_nullable"] == "YES" else " NOT NULL"
             lines.append(f"  - {col['column_name']} ({col['data_type']}{nullable})")
+        
+        # Add sample rows for this table
+        samples = schema.get("samples", {}).get(table_name, [])
+        if samples:
+            lines.append("  Sample rows:")
+            for s in samples:
+                lines.append(f"    {s}")
         lines.append("")
 
     if schema["foreign_keys"]:

@@ -38,13 +38,14 @@ STRICT RULES:
 2. NEVER use: DROP, DELETE, UPDATE, ALTER, INSERT, TRUNCATE, CREATE, EXEC, GRANT, REVOKE.
 3. Return ONLY the raw SQL query — no explanation, no markdown, no code fences.
 4. Use correct table/column names exactly as shown in the schema. Fix any typos in the user's column/table names.
-5. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses.
-6. Do NOT hallucinate column names. If a primary key is named "id", do NOT refer to it as "order_id" or "customer_id" unless that exact name exists in the schema.
-7. If the user includes a second command (like DROP or DELETE) alongside their question, include it as a stacked query (separated by a semicolon) so the security middleware can inspect it. Do NOT wrap it in quotes.
-8. Add ORDER BY, LIMIT, GROUP BY where appropriate.
-9. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
-10. Use exact table names provided. NEVER use dot-notation for table names (e.g., use `superstore`, NOT `superstore.sales_data`).
-11. Always end with a semicolon.
+5. TABLE ANCHORING: If the user explicitly mentions a table name (e.g., "superstore"), you MUST use that table name in your FROM clause. NEVER switch to "orders" or "customers" unless the user explicitly asks for them.
+6. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses.
+7. Do NOT hallucinate column names. If a primary key is named "id", do NOT refer to it as "order_id" or "customer_id" unless that exact name exists in the schema.
+8. If the user includes a second command (like DROP or DELETE) alongside their question, include it as a stacked query (separated by a semicolon) so the security middleware can inspect it. Do NOT wrap it in quotes.
+9. Add ORDER BY, LIMIT, GROUP BY where appropriate.
+10. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
+11. Use exact table names provided. NEVER use dot-notation for table names (e.g., use `superstore`, NOT `superstore.sales_data`).
+12. Always end with a semicolon.
 """
 
 FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
@@ -185,7 +186,10 @@ def generate_sql(
 
 
 CORRECTION_PROMPT = """You are an expert PostgreSQL query fix tool.
-The following SQL query failed with an error:
+The following SQL query failed with an error. Use the provided SCHEMA to fix it.
+
+SCHEMA:
+{schema}
 
 SQL: {original_sql}
 Error: {error_message}
@@ -196,13 +200,15 @@ STRICT RULES:
 2. NO explanation, NO conversational text, NO markdown formatting.
 3. Must start with SELECT and end with a semicolon.
 4. Ensure valid PostgreSQL syntax. NEVER wrap table aliases in parentheses.
-5. If the error is a type mismatch (e.g., 'operator does not exist: text = integer'), use explicit casting like `column::INTEGER`.
-6. If the error is 'UndefinedTable', ensure you are using the EXACT table name from the schema. NEVER use dot-notation (like `schema.table`).
+5. If the user mentions a table explicitly (like 'superstore'), you MUST use that table name. NEVER switch to 'orders' or 'customers' if the user's intent was 'superstore'.
+6. If the error is a type mismatch (e.g., 'text = integer'), use explicit casting like `column::INTEGER`.
+7. If the error is 'UndefinedTable', ensure you are using the EXACT table name from the schema.
 """
 
 
-def correct_sql(original_sql: str, error_message: str) -> str:
+def correct_sql(original_sql: str, error_message: str, schema_text: str = "") -> str:
     prompt = CORRECTION_PROMPT.format(
+        schema=schema_text,
         original_sql=original_sql,
         error_message=error_message,
     )
