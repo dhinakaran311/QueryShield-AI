@@ -60,14 +60,31 @@ Return ONLY the modified SELECT query ending with a semicolon.
 
 # ─── SQL cleaning ─────────────────────────────────────────────────────────────
 def _clean_sql(raw: str) -> str:
-    """Strip markdown fences, extra whitespace from LLM output."""
-    text = re.sub(r"```(?:sql)?", "", raw, flags=re.IGNORECASE)
-    text = text.replace("```", "").strip()
+    """Extract only the SQL statement, ignoring conversational text."""
+    # Grab markdown block if it exists
+    code_match = re.search(r"```(?:sql)?\s*(.*?)\s*```", raw, re.IGNORECASE | re.DOTALL)
+    text = code_match.group(1) if code_match else raw
+    
+    # Extract from SELECT to the first semicolon
+    upper_text = text.upper()
+    select_idx = upper_text.find("SELECT ")
+    
+    if select_idx != -1:
+        text = text[select_idx:]
+        semi_idx = text.find(";")
+        if semi_idx != -1:
+            text = text[:semi_idx+1]
+        else:
+            text = text + ";"
+    else:
+        # Fallback if no SELECT found
+        text = text.replace("```sql", "").replace("```", "").strip()
+        if not text.endswith(";"):
+            text += ";"
+            
+    # Flatten newlines
     lines = [l for l in text.splitlines() if l.strip()]
-    sql = " ".join(lines).strip()
-    if not sql.endswith(";"):
-        sql += ";"
-    return sql
+    return " ".join(lines).strip()
 
 
 # ─── Ollama call ──────────────────────────────────────────────────────────────
@@ -162,13 +179,18 @@ def generate_sql(
     }
 
 
-CORRECTION_PROMPT = """The following SQL query failed with an error:
+CORRECTION_PROMPT = """You are an expert PostgreSQL query fix tool.
+The following SQL query failed with an error:
 
 SQL: {original_sql}
 Error: {error_message}
 
-Fix the SQL query. Return ONLY the corrected SQL.
-Corrected SQL:"""
+Fix the SQL query.
+STRICT RULES:
+1. Return ONLY the raw SQL query.
+2. NO explanation, NO conversational text, NO markdown formatting.
+3. Must start with SELECT and end with a semicolon.
+"""
 
 
 def correct_sql(original_sql: str, error_message: str) -> str:
