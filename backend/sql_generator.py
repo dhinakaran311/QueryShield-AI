@@ -39,9 +39,10 @@ STRICT RULES:
 3. Return ONLY the raw SQL query — no explanation, no markdown, no code fences.
 4. Use correct table/column names exactly as shown in the schema.
 5. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses (e.g. use "JOIN table AS t", NOT "JOIN (table AS t)").
-6. Add ORDER BY, LIMIT, GROUP BY where appropriate.
-7. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
-8. Always end with a semicolon.
+6. Do NOT hallucinate column names. For example, if a table's primary key is "id", do NOT refer to it as "order_id" or "customer_id" unless that exact name exists in the schema.
+7. Add ORDER BY, LIMIT, GROUP BY where appropriate.
+8. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
+9. Always end with a semicolon.
 """
 
 FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
@@ -148,7 +149,8 @@ def generate_sql(
       "ollama" → local (no rate limits)
       "gemini" → Gemini 2.0 Flash
     """
-    schema      = get_full_schema(user_question)
+    context = [user_question, last_nl, last_sql]
+    schema      = get_full_schema(context)
     schema_text = build_schema_prompt(schema)
     
     from backend.memory import is_followup as detect_followup
