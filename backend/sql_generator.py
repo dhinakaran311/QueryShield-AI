@@ -38,7 +38,7 @@ STRICT RULES:
 2. NEVER use: DROP, DELETE, UPDATE, ALTER, INSERT, TRUNCATE, CREATE, EXEC, GRANT, REVOKE.
 3. Return ONLY the raw SQL query — no explanation, no markdown, no code fences.
 4. Use correct table/column names exactly as shown in the schema.
-5. Use JOINs when multiple tables are involved.
+5. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses (e.g. use "JOIN table AS t", NOT "JOIN (table AS t)").
 6. Add ORDER BY, LIMIT, GROUP BY where appropriate.
 7. Always end with a semicolon.
 """
@@ -190,6 +190,7 @@ STRICT RULES:
 1. Return ONLY the raw SQL query.
 2. NO explanation, NO conversational text, NO markdown formatting.
 3. Must start with SELECT and end with a semicolon.
+4. Ensure valid PostgreSQL syntax. NEVER wrap table aliases in parentheses.
 """
 
 
