@@ -40,7 +40,8 @@ STRICT RULES:
 4. Use correct table/column names exactly as shown in the schema.
 5. Use JOINs when multiple tables are involved. NEVER wrap table aliases in parentheses (e.g. use "JOIN table AS t", NOT "JOIN (table AS t)").
 6. Add ORDER BY, LIMIT, GROUP BY where appropriate.
-7. Always end with a semicolon.
+7. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
+8. Always end with a semicolon.
 """
 
 FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
@@ -191,6 +192,7 @@ STRICT RULES:
 2. NO explanation, NO conversational text, NO markdown formatting.
 3. Must start with SELECT and end with a semicolon.
 4. Ensure valid PostgreSQL syntax. NEVER wrap table aliases in parentheses.
+5. If the error is a type mismatch (e.g., 'operator does not exist: text = integer'), use explicit casting like `column::INTEGER`.
 """
 
 
