@@ -1,0 +1,34 @@
+{
+  "uploaded_tables": [
+    "id",
+    "table_name",
+    "uploaded_by",
+    "upload_time"
+  ],
+  "order_items": [
+    "id",
+    "order_id",
+    "product_id",
+    "quantity",
+    "unit_price",
+    "subtotal"
+  ],
+  "products": [
+    "id",
+    "name",
+    "category",
+    "price",
+    "stock_qty",
+    "created_at"
+  ],
+  "employees": [
+    "id",
+    "original_id",
+    "name",
+    "email",
+    "city",
+    "country",
+    "salary",
+    "ssn"
+  ]
+}

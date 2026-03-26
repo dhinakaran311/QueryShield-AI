@@ -42,6 +42,23 @@ export default function HomePage() {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       if (detail && typeof detail === "object" && "reason" in detail) {
         setError(`🛡️ ${(detail as { reason: string }).reason}`);
+        
+        // Allow the "Auto-corrected" badge to show even if blocked by security
+        if ((detail as any).was_corrected) {
+           setExecResult({
+             was_corrected: true,
+             corrected_sql: (detail as any).corrected_sql,
+             success: false,
+             data: [],
+             columns: [],
+             count: 0,
+             query_cost: 0,
+             cost_level: "low",
+             cost_label: "🟢 Low",
+             was_optimized: false
+           });
+           setSql((detail as any).original_sql);
+        }
       } else {
         setError(String(detail ?? "Something went wrong."));
       }

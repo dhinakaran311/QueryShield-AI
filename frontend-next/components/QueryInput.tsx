@@ -25,12 +25,12 @@ export default function QueryInput({ onSubmit, onClear, loading }: QueryInputPro
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="Ask your data anything… e.g. Show total revenue by category"
         disabled={loading}
-        className="flex-1 bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+        className="flex-1 bg-white border border-slate-200 text-slate-800 placeholder-slate-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 shadow-sm disabled:opacity-50"
       />
       <button
         type="submit"
         disabled={loading || !question.trim()}
-        className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-3 rounded-xl text-sm font-semibold transition-colors"
+        className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm"
       >
         <Search size={16} />
         {loading ? "Thinking…" : "Ask AI"}
@@ -39,7 +39,7 @@ export default function QueryInput({ onSubmit, onClear, loading }: QueryInputPro
         type="button"
         onClick={onClear}
         title="Clear history"
-        className="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-colors"
+        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-400 hover:text-slate-700 rounded-xl transition-colors shadow-sm"
       >
         <Trash2 size={16} />
       </button>

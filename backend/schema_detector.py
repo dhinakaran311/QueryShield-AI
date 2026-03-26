@@ -121,6 +121,7 @@ def get_full_schema(context_strings: list[str] = None) -> dict:
         current_words = set(re.findall(r'\b\w+\b', current_q))
         
         # 1. Check if the current question explicitly mentions a table
+        # If 'superstore' is in the question, we ONLY allow the superstore table schema.
         direct_matches = [t for t in tables if t.lower() in current_words]
         if direct_matches:
             tables = direct_matches
@@ -134,6 +135,7 @@ def get_full_schema(context_strings: list[str] = None) -> dict:
             ]
             if matched_tables:
                 tables = matched_tables
+            # If no matches at all, we keep 'tables' as the full list (default)
 
     schema = {}
     samples_map = {}

@@ -36,59 +36,48 @@ export default function CsvUpload() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div
         onDragEnter={() => setDragging(true)}
         onDragLeave={() => setDragging(false)}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
-          dragging ? "border-violet-500 bg-violet-500/10" : "border-slate-700 hover:border-slate-500"
+        className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer ${
+          dragging ? "border-violet-400 bg-violet-50" : "border-slate-200 hover:border-violet-300 bg-white"
         }`}
       >
-        <Upload className="mx-auto mb-3 text-slate-500" size={32} />
+        <Upload className="mx-auto mb-2 text-slate-300" size={28} />
         {file ? (
-          <p className="text-sm text-violet-400 font-medium">{file.name}</p>
+          <p className="text-sm text-violet-600 font-medium">{file.name}</p>
         ) : (
           <>
-            <p className="text-sm text-slate-400">Drag & drop a CSV file here</p>
-            <p className="text-xs text-slate-600 mt-1">or</p>
-            <label className="mt-2 inline-block text-xs text-violet-400 hover:text-violet-300 cursor-pointer underline">
-              browse files
-              <input
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
+            <p className="text-sm text-slate-400">Drag & drop a CSV file</p>
+            <label className="mt-1 inline-block text-xs text-violet-500 hover:text-violet-700 cursor-pointer underline">
+              browse
+              <input type="file" accept=".csv" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </label>
           </>
         )}
       </div>
-
       <input
         type="text"
         value={tableName}
         onChange={(e) => setTableName(e.target.value)}
         placeholder="Table name (e.g. sales_data)"
-        className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        className="w-full bg-white border border-slate-200 text-slate-800 placeholder-slate-400 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 shadow-sm"
       />
-
       <button
         onClick={handleUpload}
         disabled={!file || !tableName.trim() || uploading}
-        className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
+        className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
       >
         {uploading ? "Uploading…" : "🚀 Upload & Create Table"}
       </button>
-
       {result && (
-        <div
-          className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
-            result.success ? "bg-green-900/30 text-green-400 border border-green-800" : "bg-red-900/30 text-red-400 border border-red-800"
-          }`}
-        >
-          {result.success ? <CheckCircle size={16} className="mt-0.5 shrink-0" /> : <AlertCircle size={16} className="mt-0.5 shrink-0" />}
+        <div className={`flex items-start gap-2 p-3 rounded-lg text-sm border ${
+          result.success ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"
+        }`}>
+          {result.success ? <CheckCircle size={15} className="mt-0.5 shrink-0" /> : <AlertCircle size={15} className="mt-0.5 shrink-0" />}
           {result.message}
         </div>
       )}

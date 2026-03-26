@@ -18,20 +18,18 @@ export default function SqlDisplay({ sql, label = "Generated SQL" }: SqlDisplayP
   };
 
   return (
-    <div className="rounded-xl border border-slate-700 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          {label}
-        </span>
+    <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-100 border-b border-slate-200">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-600 transition-colors"
         >
-          {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+          {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
-      <pre className="p-4 text-sm text-green-400 bg-slate-900 overflow-x-auto whitespace-pre-wrap">
+      <pre className="p-4 text-sm text-violet-700 bg-violet-50 overflow-x-auto whitespace-pre-wrap font-mono">
         {sql}
       </pre>
     </div>

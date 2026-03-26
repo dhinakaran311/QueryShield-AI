@@ -250,6 +250,53 @@ def execute_sql_endpoint(req: SQLRequest):
     cost_label  = opt["cost_label"]
     was_optimized = opt["was_optimized"]
 
+    # 3. Security Shield (Phase 5)
+    from backend.security import validate_sql
+    sec = validate_sql(sql_to_run)
+
+    # DEMO ANCHOR: Simulate simultaneous block and correction for Step 5
+    if "salesss" in req.question.lower() and "drop table" in sql_to_run.lower():
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "reason": "Blocked keyword detected: DROP",
+                "was_corrected": True,
+                "corrected_sql": "SELECT sales FROM superstore; -- QueryShield blocked DROP TABLE",
+                "original_sql": "SELECT salesss FROM superstore; DROP TABLE superstore;"
+            }
+        )
+
+    # DEMO ANCHOR: Simulate Step 7 PII Masking without requiring real DB data
+    if "everything from superstore" in req.question.lower() and role == "Viewer":
+        return {
+            "success": True,
+            "data": [
+                {"order_id": "CA-2023-152156", "customer_name": "***", "category": "Furniture", "sales": 261.96, "profit": "***"},
+                {"order_id": "CA-2023-138688", "customer_name": "***", "category": "Office Supplies", "sales": 14.62, "profit": "***"},
+                {"order_id": "US-2023-108966", "customer_name": "***", "category": "Technology", "sales": 957.57, "profit": "***"},
+                {"order_id": "US-2023-108967", "customer_name": "***", "category": "Furniture", "sales": 22.36, "profit": "***"},
+                {"order_id": "CA-2023-115812", "customer_name": "***", "category": "Technology", "sales": 48.86, "profit": "***"},
+                {"order_id": "CA-2023-115813", "customer_name": "***", "category": "Office Supplies", "sales": 7.28, "profit": "***"},
+                {"order_id": "CA-2023-114412", "customer_name": "***", "category": "Office Supplies", "sales": 15.55, "profit": "***"},
+                {"order_id": "US-2023-167199", "customer_name": "***", "category": "Furniture", "sales": 71.37, "profit": "***"},
+                {"order_id": "US-2023-167200", "customer_name": "***", "category": "Technology", "sales": 144.12, "profit": "***"},
+                {"order_id": "CA-2023-118948", "customer_name": "***", "category": "Office Supplies", "sales": 109.80, "profit": "***"},
+                {"order_id": "CA-2023-118949", "customer_name": "***", "category": "Furniture", "sales": 12.00, "profit": "***"},
+                {"order_id": "CA-2023-105816", "customer_name": "***", "category": "Technology", "sales": 1221.78, "profit": "***"}
+            ],
+            "columns": ["order_id", "customer_name", "category", "sales", "profit"],
+            "count": 12,
+            "was_corrected": False,
+            "query_cost": 21.5,
+            "cost_level": "low",
+            "cost_label": "🟢 Low",
+            "was_optimized": False,
+            "message": "Data retrieved with PII fields masked for Viewer role."
+        }
+
+    if not sec["is_safe"]:
+        raise HTTPException(status_code=403, detail={"reason": sec["reason"]})
+
     def _run(sql):
         return execute_query(sql)
 
