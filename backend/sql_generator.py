@@ -132,7 +132,9 @@ def generate_sql(
     """
     schema      = get_full_schema()
     schema_text = build_schema_prompt(schema)
-    is_followup = bool(last_sql and last_nl)
+    
+    from backend.memory import is_followup as detect_followup
+    is_followup = bool(last_sql and last_nl and detect_followup(user_question))
 
     if is_followup:
         prompt = FOLLOWUP_PROMPT.format(
