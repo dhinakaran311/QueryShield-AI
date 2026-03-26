@@ -92,6 +92,10 @@ def upload_csv(
     # 3. Sanitize column names
     df.columns = [_sanitize_name(c) for c in df.columns]
 
+    # Prevent DuplicateColumn error if the CSV already has an "id" column
+    if "id" in df.columns:
+        df.rename(columns={"id": "original_id"}, inplace=True)
+
     # 4. Build schema info for response
     schema = {col: _infer_pg_type(df[col]) for col in df.columns}
 
