@@ -47,17 +47,25 @@ STRICT RULES:
 """
 
 FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
+Your goal is to MODIFY the PREVIOUS SQL query based on a NEW follow-up question.
 
 DATABASE SCHEMA:
 {schema}
 
-Previous question: "{last_nl}"
-Previous SQL: {last_sql}
+PREVIOUS SQL:
+{last_sql}
 
-User follow-up: "{followup_question}"
+NEW FOLLOW-UP QUESTION:
+"{followup_question}"
 
-Modify the previous SQL to satisfy the follow-up.
-Return ONLY the modified SELECT query ending with a semicolon.
+STRICT RULES:
+1. Treat the PREVIOUS SQL as the base logic (JOINs, table names). 
+2. MODIFY only the necessary parts (e.g., add/change WHERE clauses, update ORDER BY, or filter based on NEW QUESTION).
+3. Use the "Sample rows" in the schema to understand the actual data values.
+4. Return ONLY the raw SQL — no explanation, no markdown.
+5. MUST start with SELECT and end with a semicolon.
+6. NEVER wrap table aliases in parentheses.
+7. If the previous SQL had a LIMIT, keep or update it appropriately.
 """
 
 
