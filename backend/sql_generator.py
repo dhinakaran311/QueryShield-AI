@@ -42,7 +42,8 @@ STRICT RULES:
 6. Do NOT hallucinate column names. For example, if a table's primary key is "id", do NOT refer to it as "order_id" or "customer_id" unless that exact name exists in the schema.
 7. Add ORDER BY, LIMIT, GROUP BY where appropriate.
 8. If joining a TEXT/VARCHAR column with an INTEGER column, use explicit casting (e.g., `table1.col::INTEGER = table2.col`).
-9. Always end with a semicolon.
+9. Use exact table names provided. NEVER use dot-notation for table names (e.g., use `superstore`, NOT `superstore.sales_data`).
+10. Always end with a semicolon.
 """
 
 FOLLOWUP_PROMPT = """You are an expert PostgreSQL query generator.
@@ -195,6 +196,7 @@ STRICT RULES:
 3. Must start with SELECT and end with a semicolon.
 4. Ensure valid PostgreSQL syntax. NEVER wrap table aliases in parentheses.
 5. If the error is a type mismatch (e.g., 'operator does not exist: text = integer'), use explicit casting like `column::INTEGER`.
+6. If the error is 'UndefinedTable', ensure you are using the EXACT table name from the schema. NEVER use dot-notation (like `schema.table`).
 """
 
 
