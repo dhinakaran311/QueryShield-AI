@@ -78,7 +78,14 @@ def upload_csv(
 
     # 2. Read CSV
     import io
-    df = pd.read_csv(io.BytesIO(file_bytes))
+    try:
+        df = pd.read_csv(io.BytesIO(file_bytes), encoding="utf-8")
+    except UnicodeDecodeError:
+        try:
+            df = pd.read_csv(io.BytesIO(file_bytes), encoding="windows-1252")
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(file_bytes), encoding="latin1")
+
     if df.empty:
         raise ValueError("Uploaded CSV is empty.")
 
