@@ -23,6 +23,8 @@ load_dotenv()
 LLM_PROVIDER    = os.getenv("LLM_PROVIDER", "ollama").lower()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "mistral:latest")
+GROQ_API_KEY    = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL      = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
 # ─── Prompt templates ─────────────────────────────────────────────────────────
@@ -143,6 +145,29 @@ def _call_gemini(prompt: str) -> str:
     raise last_error
 
 
+# ─── Groq call ────────────────────────────────────────────────────────────────
+def _call_groq(prompt: str) -> str:
+    """Call Groq API with Llama model."""
+    from groq import Groq
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert PostgreSQL query generator. Return ONLY raw SQL queries, no explanations.",
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ],
+        temperature=0.1,
+        max_tokens=1024,
+    )
+    return response.choices[0].message.content.strip()
+
+
 # ─── Main generate function ───────────────────────────────────────────────────
 def generate_sql(
     user_question: str,
@@ -189,15 +214,23 @@ def generate_sql(
     # Dispatch to provider
     if LLM_PROVIDER == "gemini":
         raw = _call_gemini(prompt)
+    elif LLM_PROVIDER == "groq":
+        raw = _call_groq(prompt)
     else:  # default: ollama
         raw = _call_ollama(prompt)
+
+    model_used = (
+        GROQ_MODEL if LLM_PROVIDER == "groq"
+        else "gemini-2.0-flash" if LLM_PROVIDER == "gemini"
+        else OLLAMA_MODEL
+    )
 
     return {
         "sql":         _clean_sql(raw),
         "is_followup": is_followup,
         "schema_used": list(schema["tables"].keys()),
         "provider":    LLM_PROVIDER,
-        "model":       OLLAMA_MODEL if LLM_PROVIDER == "ollama" else "gemini-2.0-flash",
+        "model":       model_used,
     }
 
 
@@ -230,6 +263,8 @@ def correct_sql(original_sql: str, error_message: str, schema_text: str = "") ->
     )
     if LLM_PROVIDER == "gemini":
         raw = _call_gemini(prompt)
+    elif LLM_PROVIDER == "groq":
+        raw = _call_groq(prompt)
     else:
         raw = _call_ollama(prompt)
     return _clean_sql(raw)
