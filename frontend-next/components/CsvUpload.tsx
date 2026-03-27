@@ -4,7 +4,12 @@ import { useCallback, useState } from "react";
 import { Upload, CheckCircle, AlertCircle, FileText, X } from "lucide-react";
 import { uploadCsv } from "@/lib/api";
 
-export default function CsvUpload() {
+interface CsvUploadProps {
+  /** Called after a successful upload — use to trigger parent refresh */
+  onSuccess?: () => void;
+}
+
+export default function CsvUpload({ onSuccess }: CsvUploadProps) {
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [tableName, setTableName] = useState("");
@@ -49,6 +54,7 @@ export default function CsvUpload() {
       setResult({ success: true, message: res.data.message });
       setFile(null);
       setTableName("");
+      onSuccess?.();
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })
         ?.response?.data?.detail;

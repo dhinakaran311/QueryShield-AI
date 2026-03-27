@@ -70,5 +70,8 @@ export const uploadCsv = (
 
 export const getSchema = () => API.get("/schema");
 export const getHealth = () => API.get("/health");
+export const getUploadedTables = () => API.get<{ tables: { id: number; table_name: string; uploaded_by: string; upload_time: string }[]; count: number }>("/uploaded-tables");
+export const getTableSchema = (tableName: string) => API.get<{ table_name: string; columns: { column_name: string; data_type: string }[]; column_count: number }>(`/schema/${tableName}`);
 export const clearMemory = (sessionId: string = "default") =>
   API.post("/clear-memory", null, { params: { session_id: sessionId } });
+

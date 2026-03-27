@@ -8,6 +8,7 @@ import ResultsTable from "@/components/ResultsTable";
 import ChartView from "@/components/ChartView";
 import MemorySidebar from "@/components/MemorySidebar";
 import CsvUpload from "@/components/CsvUpload";
+import TableList from "@/components/TableList";
 import { generateSql, executeSql, clearMemory, ExecuteSqlResponse } from "@/lib/api";
 
 type Tab = "query" | "upload";
@@ -23,6 +24,7 @@ export default function HomePage() {
   const [execResult, setExecResult] = useState<ExecuteSqlResponse | null>(null);
   const [lastNl, setLastNl] = useState<string | null>(null);
   const [lastSql, setLastSql] = useState<string | null>(null);
+  const [uploadRefresh, setUploadRefresh] = useState(0);
 
   const handleQuery = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +136,16 @@ export default function HomePage() {
             <RoleSelector role={role} onChange={setRole} />
             <div className="border-t border-slate-800" />
             <MemorySidebar lastNl={lastNl} lastSql={lastSql} />
+          </div>
+          {/* Tables list */}
+          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4">
+            <TableList
+              refreshTrigger={uploadRefresh}
+              onQueryTable={(q) => {
+                setQuestion(q);
+                setTab("query");
+              }}
+            />
           </div>
         </aside>
 
@@ -277,7 +289,7 @@ export default function HomePage() {
                   Upload a CSV file to auto-create a queryable table in the database.
                   Then switch to the <strong className="text-slate-300">Query</strong> tab to ask questions about it.
                 </p>
-                <CsvUpload />
+                <CsvUpload onSuccess={() => setUploadRefresh((n) => n + 1)} />
               </div>
               <p className="text-xs text-slate-700 mt-3 text-center">
                 CSV files up to 50 MB · Table names are auto-sanitized
