@@ -78,12 +78,23 @@ def upload_csv(
 
     # 2. Read CSV
     import io
-    df = pd.read_csv(io.BytesIO(file_bytes))
+    try:
+        df = pd.read_csv(io.BytesIO(file_bytes), encoding="utf-8")
+    except UnicodeDecodeError:
+        try:
+            df = pd.read_csv(io.BytesIO(file_bytes), encoding="windows-1252")
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(file_bytes), encoding="latin1")
+
     if df.empty:
         raise ValueError("Uploaded CSV is empty.")
 
     # 3. Sanitize column names
     df.columns = [_sanitize_name(c) for c in df.columns]
+
+    # Prevent DuplicateColumn error if the CSV already has an "id" column
+    if "id" in df.columns:
+        df.rename(columns={"id": "original_id"}, inplace=True)
 
     # 4. Build schema info for response
     schema = {col: _infer_pg_type(df[col]) for col in df.columns}

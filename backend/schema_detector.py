@@ -49,6 +49,15 @@ def get_table_columns(table_name: str) -> list[dict]:
     """
     with engine.connect() as conn:
         rows = conn.execute(text(sql), {"tname": table_name}).fetchall()
+        
+        # Also fetch a few sample rows to help the LLM understand the data
+        sample_sql = f'SELECT * FROM "{table_name}" LIMIT 3'
+        try:
+            sample_rows = conn.execute(text(sample_sql)).fetchall()
+            samples = [str(dict(r._mapping)) for r in sample_rows]
+        except:
+            samples = []
+
     return [
         {
             "column_name":    row[0],
@@ -57,7 +66,7 @@ def get_table_columns(table_name: str) -> list[dict]:
             "column_default": row[3],
         }
         for row in rows
-    ]
+    ], samples
 
 
 # ─── 3. Foreign key relationships ────────────────────────────────────────────
@@ -98,33 +107,55 @@ def get_foreign_keys() -> list[dict]:
 
 
 # ─── 4. Full schema context (for LLM injection) ───────────────────────────────
+import re
 
-def get_full_schema() -> dict:
+def get_full_schema(context_strings: list[str] = None) -> dict:
     """
-    Build a complete schema context dict:
-    {
-        "tables": {
-            "customers": [
-                {"column_name": "id", "data_type": "integer", ...},
-                ...
-            ],
-            ...
-        },
-        "foreign_keys": [
-            {"table": "orders", "column": "customer_id", ...},
-            ...
-        ]
-    }
+    Build a complete schema context dict.
+    Filters tables matching any word in context_strings to reduce LLM confusion.
     """
     tables = get_all_tables()
+    
+    if context_strings and context_strings[0]:
+        current_q = context_strings[0].lower()
+        current_words = set(re.findall(r'\b\w+\b', current_q))
+        
+        # 1. Check if the current question explicitly mentions a table
+        # If 'superstore' is in the question, we ONLY allow the superstore table schema.
+        direct_matches = [t for t in tables if t.lower() in current_words]
+        if direct_matches:
+            tables = direct_matches
+        else:
+            # 2. Fall back to wider context (history) if no direct match in current Q
+            blob = " ".join([s for s in context_strings if s]).lower()
+            query_words = set(re.findall(r'\b\w+\b', blob))
+            matched_tables = [
+                t for t in tables 
+                if t.lower() in query_words or any(t.lower() in w for w in query_words)
+            ]
+            if matched_tables:
+                tables = matched_tables
+            # If no matches at all, we keep 'tables' as the full list (default)
+
     schema = {}
+    samples_map = {}
     for table in tables:
-        schema[table] = get_table_columns(table)
+        cols, samples = get_table_columns(table)
+        schema[table] = cols
+        samples_map[table] = samples
 
     foreign_keys = get_foreign_keys()
+    
+    # Filter FKs to only include relationships between matched tables
+    if context_strings and tables:
+        foreign_keys = [
+            fk for fk in foreign_keys 
+            if fk["table"] in tables and fk["references_table"] in tables
+        ]
 
     return {
         "tables":       schema,
+        "samples":      samples_map,
         "foreign_keys": foreign_keys,
     }
 
@@ -134,14 +165,7 @@ def get_full_schema() -> dict:
 def build_schema_prompt(schema: dict) -> str:
     """
     Convert the schema dict into a clean text block for LLM system prompts.
-
-    Example output:
-        Table: customers
-          - id (integer)
-          - name (text)
-          ...
-        Foreign Keys:
-          - orders.customer_id → customers.id
+    Includes sample rows to help LLM understand the data content.
     """
     lines = []
 
@@ -150,6 +174,13 @@ def build_schema_prompt(schema: dict) -> str:
         for col in columns:
             nullable = "" if col["is_nullable"] == "YES" else " NOT NULL"
             lines.append(f"  - {col['column_name']} ({col['data_type']}{nullable})")
+        
+        # Add sample rows for this table
+        samples = schema.get("samples", {}).get(table_name, [])
+        if samples:
+            lines.append("  Sample rows:")
+            for s in samples:
+                lines.append(f"    {s}")
         lines.append("")
 
     if schema["foreign_keys"]:
