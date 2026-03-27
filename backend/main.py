@@ -182,6 +182,7 @@ import sqlalchemy.exc
 from backend.sql_generator import generate_sql as llm_generate_sql, correct_sql
 from backend.optimizer import optimize_sql
 from backend.access_control import check_table_access, mask_columns
+from backend.security import validate_sql
 
 class SQLRequest(BaseModel):
     question: str
@@ -195,7 +196,7 @@ def generate_sql_endpoint(req: SQLRequest):
     """
     Convert a natural language question to a PostgreSQL SELECT query.
 
-    - Uses Gemini 2.0 / Ollama with full schema context
+    - Uses Groq Llama / Gemini / Ollama with full schema context
     - Returns SELECT-only SQL (validated via security layer)
     """
     if not req.question.strip():
