@@ -125,9 +125,9 @@ export default function TableList({ onQueryTable, refreshTrigger = 0 }: TableLis
         {tables.map((t) => (
           <div key={t.id} className="rounded-lg border border-slate-800 overflow-hidden">
             {/* Table row */}
-            <button
+            <div
               onClick={() => toggleExpand(t.table_name)}
-              className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-slate-800 transition-colors group"
+              className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-slate-800 transition-colors group cursor-pointer"
             >
               {expanded === t.table_name
                 ? <ChevronDown size={12} className="text-violet-400 shrink-0" />
@@ -145,7 +145,7 @@ export default function TableList({ onQueryTable, refreshTrigger = 0 }: TableLis
               >
                 <Zap size={12} />
               </button>
-            </button>
+            </div>
 
             {/* Expanded: columns */}
             {expanded === t.table_name && (
