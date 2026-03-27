@@ -8,7 +8,7 @@ import SqlDisplay from "@/components/SqlDisplay";
 import ResultsTable from "@/components/ResultsTable";
 import ChartView from "@/components/ChartView";
 import MemorySidebar from "@/components/MemorySidebar";
-import CsvUpload from "@/components/CsvUpload";
+
 import { generateSql, executeSql, clearMemory, ExecuteSqlResponse } from "@/lib/api";
 import { Wrench, Zap, MessagesSquare, AlertTriangle } from "lucide-react";
 
@@ -89,10 +89,7 @@ export default function HomePage() {
             <div className="border-t border-slate-100" />
             <MemorySidebar lastNl={lastNl} lastSql={lastSql} />
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Upload CSV</p>
-            <CsvUpload />
-          </div>
+
         </aside>
 
         {/* Main */}
