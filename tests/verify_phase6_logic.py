@@ -6,9 +6,10 @@ from dotenv import load_dotenv
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.sql_generator import generate_sql
+from backend.sql_generator import generate_sql, correct_sql
 from backend.database import execute_query
 from backend.security import validate_sql
+import sqlalchemy.exc
 
 load_dotenv()
 
@@ -37,16 +38,28 @@ def verify_query(question):
     print("Step 3: Database Execution...")
     try:
         rows = execute_query(sql)
-        count = len(rows)
-        print(f"Success! {count} rows returned.")
-        if count > 0:
-            df = pd.DataFrame(rows)
-            print("Output Data:")
-            print(df.head(5))
-        return True
+    except (sqlalchemy.exc.ProgrammingError, sqlalchemy.exc.OperationalError) as e:
+        print(f"EXECUTION ERROR: {e}")
+        error_msg = str(e.orig) if hasattr(e, "orig") and e.orig else str(e)
+        print("Attempting to auto-correct SQL...")
+        try:
+            sql = correct_sql(sql, error_msg)
+            print(f"Corrected SQL: {sql}")
+            rows = execute_query(sql)
+        except Exception as inner_e:
+            print(f"EXECUTION FAILED after correction: {inner_e}")
+            return False
     except Exception as e:
         print(f"EXECUTION FAILED: {e}")
         return False
+
+    count = len(rows)
+    print(f"Success! {count} rows returned.")
+    if count > 0:
+        df = pd.DataFrame(rows)
+        print("Output Data:")
+        print(df.head(5))
+    return True
 
 if __name__ == "__main__":
     print("="*60)

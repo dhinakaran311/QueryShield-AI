@@ -51,8 +51,8 @@ if __name__ == "__main__":
     test_cases = [
         "Show all customers",
         "How many orders are there in total?",
-        "Show name and price of top 3 products",
-        "Total subtotal from order_items"
+        "Show name and price of the top 3 most expensive products",
+        "What is the sum of subtotal from order_items?"
     ]
 
     for q in test_cases:
