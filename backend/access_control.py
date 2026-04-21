@@ -10,16 +10,20 @@ from typing import List, Dict, Optional
 # ─── Role Permission Matrix ────────────────────────────────────────────────────
 ROLE_PERMISSIONS = {
     "Admin": {
-        "blocked_tables": [],          # Admin can query everything
-        "blocked_columns": [],         # Admin sees all columns
+        "blocked_tables": [],
+        "blocked_columns": [],
     },
+
     "Analyst": {
-        "blocked_tables": ["hr", "employees", "payroll", "secret_deals"],
-        "blocked_columns": ["salary", "ssn", "profit", "customer_name"],
+        # ❌ DO NOT block employees here
+        "blocked_tables": ["hr", "payroll", "secret_deals"],
+        "blocked_columns": ["salary", "ssn"],
     },
+
     "Viewer": {
-        "blocked_tables": ["hr", "employees", "payroll"], # Viewer is banned from HR
-        "blocked_columns": ["email", "salary", "ssn", "profit", "customer_name", "customer_id"],
+        # Allow employees but restrict sensitive fields
+        "blocked_tables": ["hr", "payroll"],
+        "blocked_columns": ["email", "salary", "ssn"],
     },
 }
 

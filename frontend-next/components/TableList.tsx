@@ -32,7 +32,8 @@ const TYPE_COLOR: Record<string, string> = {
   date:      "text-pink-400",
 };
 
-function typeColor(dt: string) {
+function typeColor(dt: string | null | undefined) {
+  if (!dt) return "text-slate-400";
   return TYPE_COLOR[dt.toLowerCase()] ?? "text-slate-400";
 }
 

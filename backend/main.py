@@ -149,7 +149,7 @@ def get_table_schema(table_name: str):
                 status_code=404,
                 detail=f"Table '{table_name}' not found in public schema."
             )
-        columns = get_table_columns(table_name)
+        columns, samples = get_table_columns(table_name)
         return {
             "table_name": table_name,
             "columns":    columns,
